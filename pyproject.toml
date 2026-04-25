@@ -1,0 +1,22 @@
+[project]
+name = "commitiq"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Aritra Sadhukhan", email = "aritrasadhukhan430@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.3.3",
+    "gitpython>=3.1.47",
+    "pydantic>=2.13.3",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+commitiq = "commitiq:main"
+
+[build-system]
+requires = ["uv_build>=0.11.3,<0.12.0"]
+build-backend = "uv_build"

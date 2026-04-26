@@ -1,17 +1,128 @@
 import click
-from gitx import GitX
-from datetime import date
-from config import load
+from .config import config
+from .gitx import GitX
+from .ai import Summarizer
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import litellm
+from datetime import date, timedelta
+from pathlib import Path
+from typing import Optional, Dict, List, Tuple
 
+@click.group()
+def cli():
+    """entry point for all commands"""
 
-@click.command()
-@click.option("--since", default=date.today())
-@click.option("--until", default=date.today())
-def commits(since: str, until: str):
-    config = load()
-    print("config=====>", config)
-    for r in config.repos:
-        repo = GitX(r.path)
-        commits = repo.get_commits(
-            "aritrasadhukhan430@gmail.com", since, until)
-        print(r.name or 'unknown', "===========>", commits)
+@cli.command()
+@click.option("--since", default=None, help="start date (YYYY-MM-DD), defaults to Monday of current week")
+@click.option("--until", default=None, help="end date (YYYY-MM-DD), defaults to today")
+@click.option("--model", default=None, help="litellm model string (overrides saved model)")
+def summarize(since: Optional[str], until: Optional[str], model: Optional[str]):
+    """summarize commits across all repos as functional tasks, grouped by repo and date"""
+    today = date.today()
+    since = since or (today - timedelta(days=today.weekday())).isoformat()
+    until = until or today.isoformat()
+    if not config.config.repos:
+        click.echo("No repos configured. Run: commitiq add <path>")
+        return
+
+    by_repo: Dict[str, Dict[str, List[str]]] = {}
+    for r in config.config.repos:
+        repo_name = r.name or r.path
+        by_repo[repo_name] = {}
+        for c in GitX(r.path).get_commits(since, until):
+            d = c.authored_datetime.date().isoformat()
+            if d not in by_repo[repo_name]:
+                by_repo[repo_name][d] = []
+            by_repo[repo_name][d].append(str(c.message).strip().splitlines()[0])
+
+    by_repo = {repo: dates for repo, dates in by_repo.items() if dates}
+
+    if not by_repo:
+        click.echo("No commits found for the given range.")
+        return
+
+    active_model = model or config.config.model
+    summarizer = Summarizer(model=active_model)
+
+    # fan out all LLM calls concurrently — one future per (repo, date) pair
+    jobs: Dict[Tuple[str, str], List[str]] = {
+        (repo_name, d): commits
+        for repo_name, dates in by_repo.items()
+        for d, commits in dates.items()
+    }
+
+    total_commits = sum(len(c) for c in jobs.values())
+    click.echo(
+        f"Summarizing {click.style(str(total_commits), bold=True)} commit(s) across "
+        f"{click.style(str(len(by_repo)), bold=True)} repo(s) · "
+        f"{click.style(active_model, fg='cyan')}\n"
+    )
+
+    results: Dict[Tuple[str, str], List[str]] = {}
+    with click.progressbar(length=len(jobs), label="  Processing", width=36, show_pos=True) as bar:
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(summarizer.summarize, commits): key for key, commits in jobs.items()}
+            for future in as_completed(futures):
+                key = futures[future]
+                try:
+                    results[key] = future.result()
+                except Exception as e:
+                    repo_name, d = key
+                    click.echo(click.style(f"\n  warning: failed to summarize {repo_name} / {d}: {e}", fg="yellow"), err=True)
+                bar.update(1)
+    click.echo()
+
+    for repo_name, dates in sorted(by_repo.items()):
+        click.echo(click.style(f"◆ {repo_name}", bold=True, fg="cyan"))
+        for d in sorted(dates.keys(), reverse=True):
+            click.echo(f"  {click.style(d, bold=True)}")
+            for task in results.get((repo_name, d), []):
+                click.echo(f"    • {task}")
+        click.echo()
+
+@cli.command()
+@click.argument("model")
+@click.option("--no-verify", is_flag=True, help="skip test call (for offline/local models)")
+def use(model: str, no_verify: bool):
+    """set the default AI model (e.g. gpt-4o-mini, claude-3-haiku-20240307)"""
+    if not no_verify:
+        click.echo(f"Verifying {model}...")
+        try:
+            litellm.completion(model=model, messages=[{"role": "user", "content": "hi"}], max_tokens=1)
+        except Exception as e:
+            click.echo(click.style("✘ Model verification failed: ", fg="red", bold=True) + str(e))
+            return
+    config.set_model(model)
+    click.echo(click.style("✔ Model set to ", fg="green", bold=True) + click.style(model, bold=True))
+
+@cli.command(name="list")
+def list_repos():
+    """list all configured repos"""
+    repos = config.config.repos
+    if not repos:
+        click.echo("No repos configured. Run: commitiq add <path>")
+        return
+    for r in repos:
+        click.echo(click.style(r.name or r.path, bold=True) + click.style(f"  {r.path}", fg="bright_black"))
+
+@cli.command()
+@click.argument("path")
+def remove(path: str):
+    """remove a repo from the list"""
+    p = str(Path(path).resolve())
+    if not config.get_repo(p):
+        click.echo(click.style("✘ Repo not found: ", fg="red", bold=True) + p)
+        return
+    config.remove_repo(p)
+    click.echo(click.style("✔ Repo removed", fg="green", bold=True) + f"  {p}")
+
+@cli.command()
+@click.argument("path")
+@click.option("--name")
+def add(path: str, name: Optional[str]):
+    """adds the given directory to the repo list"""
+    p = Path(path).resolve()
+    repo_name = name or p.name
+    config.add_repo(str(p), repo_name)
+    click.echo(click.style("✔ Repo added", fg="green", bold=True) + f"  {click.style(repo_name, bold=True)} → {p}")
+

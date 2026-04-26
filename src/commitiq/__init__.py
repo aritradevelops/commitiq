@@ -1,5 +1,5 @@
-from .cli import commits
+from .cli import cli
 
 
 def main() -> None:
-    commits()
+    cli()

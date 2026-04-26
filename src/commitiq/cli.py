@@ -1,4 +1,5 @@
 import click
+import json
 from .config import config
 from .gitx import GitX
 from .ai import Summarizer
@@ -16,13 +17,14 @@ def cli():
 @click.option("--since", default=None, help="start date (YYYY-MM-DD), defaults to Monday of current week")
 @click.option("--until", default=None, help="end date (YYYY-MM-DD), defaults to today")
 @click.option("--model", default=None, help="litellm model string (overrides saved model)")
-def summarize(since: Optional[str], until: Optional[str], model: Optional[str]):
+@click.option("--format", "output_format", default="text", type=click.Choice(["text", "json"]), help="output format (text or json)")
+def summarize(since: Optional[str], until: Optional[str], model: Optional[str], output_format: str):
     """summarize commits across all repos as functional tasks, grouped by repo and date"""
     today = date.today()
     since = since or (today - timedelta(days=today.weekday())).isoformat()
     until = until or today.isoformat()
     if not config.config.repos:
-        click.echo("No repos configured. Run: commitiq add <path>")
+        click.echo("No repos configured. Run: commitiq add <path>", err=output_format == "json")
         return
 
     by_repo: Dict[str, Dict[str, List[str]]] = {}
@@ -38,7 +40,7 @@ def summarize(since: Optional[str], until: Optional[str], model: Optional[str]):
     by_repo = {repo: dates for repo, dates in by_repo.items() if dates}
 
     if not by_repo:
-        click.echo("No commits found for the given range.")
+        click.echo("No commits found for the given range.", err=output_format == "json")
         return
 
     active_model = model or config.config.model
@@ -55,11 +57,15 @@ def summarize(since: Optional[str], until: Optional[str], model: Optional[str]):
     click.echo(
         f"Summarizing {click.style(str(total_commits), bold=True)} commit(s) across "
         f"{click.style(str(len(by_repo)), bold=True)} repo(s) · "
-        f"{click.style(active_model, fg='cyan')}\n"
+        f"{click.style(active_model, fg='cyan')}\n",
+        err=output_format == "json",
     )
 
     results: Dict[Tuple[str, str], List[str]] = {}
-    with click.progressbar(length=len(jobs), label="  Processing", width=36, show_pos=True) as bar:
+    with click.progressbar(
+        length=len(jobs), label="  Processing", width=36, show_pos=True,
+        file=click.get_text_stream("stderr") if output_format == "json" else None,
+    ) as bar:
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(summarizer.summarize, commits): key for key, commits in jobs.items()}
             for future in as_completed(futures):
@@ -70,7 +76,16 @@ def summarize(since: Optional[str], until: Optional[str], model: Optional[str]):
                     repo_name, d = key
                     click.echo(click.style(f"\n  warning: failed to summarize {repo_name} / {d}: {e}", fg="yellow"), err=True)
                 bar.update(1)
-    click.echo()
+    click.echo(err=output_format == "json")
+
+    if output_format == "json":
+        output = [
+            {"repo": repo_name, "date": d, "tasks": results.get((repo_name, d), [])}
+            for repo_name, dates in sorted(by_repo.items())
+            for d in sorted(dates.keys(), reverse=True)
+        ]
+        click.echo(json.dumps(output, indent=2))
+        return
 
     for repo_name, dates in sorted(by_repo.items()):
         click.echo(click.style(f"◆ {repo_name}", bold=True, fg="cyan"))

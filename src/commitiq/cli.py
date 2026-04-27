@@ -16,15 +16,15 @@ def cli():
 
 
 @cli.command()
-@click.option("--since", default=None, help="start date (YYYY-MM-DD), defaults to Monday of current week")
-@click.option("--until", default=None, help="end date (YYYY-MM-DD), defaults to today")
+@click.option("--from", "from_date", default=None, help="start date (YYYY-MM-DD), defaults to Monday of current week")
+@click.option("--to", "to_date", default=None, help="end date (YYYY-MM-DD), defaults to today")
 @click.option("--model", default=None, help="litellm model string (overrides saved model)")
 @click.option("--format", "output_format", default="text", type=click.Choice(["text", "json"]), help="output format (text or json)")
-def summarize(since: Optional[str], until: Optional[str], model: Optional[str], output_format: str):
+def summarize(from_date: Optional[str], to_date: Optional[str], model: Optional[str], output_format: str):
     """summarize commits across all repos as functional tasks, grouped by date then repo"""
     today = date.today()
-    since = since or (today - timedelta(days=today.weekday())).isoformat()
-    until = until or today.isoformat()
+    from_date = from_date or (today - timedelta(days=today.weekday())).isoformat()
+    to_date = to_date or today.isoformat()
     if not cfg.repos:
         click.echo("No repos configured. Run: commitiq add <path>",
                    err=output_format == "json")
@@ -34,7 +34,7 @@ def summarize(since: Optional[str], until: Optional[str], model: Optional[str], 
     for r in cfg.repos:
         repo_name = r.name or r.path
         by_repo[repo_name] = {}
-        for c in Repository(r.path).commits(date.fromisoformat(since), date.fromisoformat(until)):
+        for c in Repository(r.path).commits(date.fromisoformat(from_date), date.fromisoformat(to_date)):
             d = c.authored_datetime.date().isoformat()
             if d not in by_repo[repo_name]:
                 by_repo[repo_name][d] = []

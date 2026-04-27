@@ -122,7 +122,7 @@ commitiq summarize
 Summarize a custom date range:
 
 ```bash
-commitiq summarize --since 2025-04-01 --until 2025-04-30
+commitiq summarize --from 2025-04-01 --to 2025-04-30
 ```
 
 Override the model for a single run:
@@ -206,7 +206,7 @@ For agents built with the [MCP Python SDK](https://github.com/modelcontextprotoc
 | `list_repos` | Returns all repos currently tracked by CommitIQ (`path`, `name`). |
 | `add_repo(path, name?)` | Adds a repo to the tracked list. `name` is optional. |
 | `remove_repo(path)` | Removes a repo from the tracked list. |
-| `summarize(since?, until?, model?)` | Summarizes commits as functional tasks. `since`/`until` are `YYYY-MM-DD` (defaults to current week). `model` overrides the saved model for that call. Returns a list of `{date, repos: [{repo, tasks}]}` objects. |
+| `summarize(from_date?, to_date?, model?)` | Summarizes commits as functional tasks. `from_date`/`to_date` are `YYYY-MM-DD` (defaults to current week). `model` overrides the saved model for that call. Returns a list of `{date, repos: [{repo, tasks}]}` objects. |
 
 ### Example prompts
 

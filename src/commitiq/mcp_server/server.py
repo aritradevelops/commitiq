@@ -39,16 +39,16 @@ def remove_repo(path: str) -> str:
 
 
 @mcp.tool()
-def summarize(since: str = "", until: str = "", model: str = "") -> list[dict]:
+def summarize(from_date: str = "", to_date: str = "", model: str = "") -> list[dict]:
     """
     Summarize commits across all configured repos as functional tasks.
-    since/until: YYYY-MM-DD (defaults to current week Mon to today).
+    from_date/to_date: YYYY-MM-DD (defaults to current week Mon to today).
     model: litellm model string (defaults to configured model).
     Returns a list of {repo, date, tasks} objects.
     """
     today = date.today()
-    since = since or (today - timedelta(days=today.weekday())).isoformat()
-    until = until or today.isoformat()
+    from_date = from_date or (today - timedelta(days=today.weekday())).isoformat()
+    to_date = to_date or today.isoformat()
     active_model = model or cfg.model
     summarizer = Summarizer(model=active_model)
 
@@ -56,7 +56,7 @@ def summarize(since: str = "", until: str = "", model: str = "") -> list[dict]:
     for r in cfg.repos:
         repo_name = r.name or r.path
         by_date: dict[str, list[str]] = {}
-        for c in Repository(r.path).commits(date.fromisoformat(since), date.fromisoformat(until)):
+        for c in Repository(r.path).commits(date.fromisoformat(from_date), date.fromisoformat(to_date)):
             d = c.authored_datetime.date().isoformat()
             by_date.setdefault(d, []).append(str(c.message).strip().splitlines()[0])
         for d, commits in sorted(by_date.items(), reverse=True):

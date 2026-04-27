@@ -9,11 +9,11 @@ class Repository:
         self._repo = Repo(path)
         self._author = self._resolve_author()
 
-    def commits(self, since: date, until: date) -> Iterator[Commit]:
+    def commits(self, from_date: date, to_date: date) -> Iterator[Commit]:
         return self._repo.iter_commits(
             author=self._author,
-            since=since.isoformat(),
-            until=until.isoformat(),
+            since=f"{from_date.isoformat()} 00:00:00",
+            until=f"{to_date.isoformat()} 23:59:59",
         )
 
     def _resolve_author(self) -> str:

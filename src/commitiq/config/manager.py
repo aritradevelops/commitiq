@@ -47,8 +47,12 @@ class ConfigManager:
     # ------------------------
 
     @property
-    def config(self) -> Config:
-        return self._config
+    def repos(self) -> List[RepoConfig]:
+        return self._config.repos
+
+    @property
+    def model(self) -> str:
+        return self._config.model
 
     def add_repo(self, path: str, name: Optional[str] = None):
         self._config.repos.append(RepoConfig(path=path, name=name))

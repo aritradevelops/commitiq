@@ -6,7 +6,8 @@ _SYSTEM_PROMPT = (
     "Given a list of git commit messages, produce a concise bullet list of "
     "one-line functional tasks — what the product gained or what the user can now do. "
     "Avoid technical jargon (no file names, no function names, no 'refactor'). "
-    "Each line should read as a completed action, e.g. 'Added password reset flow'."
+    "Each line should read as a completed action, e.g. 'Added password reset flow'. "
+    "Output only the list — no notes, no parenthetical comments, no explanations."
 )
 
 _CONSOLIDATE_PROMPT = (
@@ -50,7 +51,7 @@ class Summarizer:
             model=self.model,
             messages=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": f"{block}\n\nReturn only the task list, one item per line."},
+                {"role": "user", "content": f"{block}\n\nReturn only the task list, one item per line. No notes, no parenthetical comments, no explanations — just the tasks."},
             ],
         )
         raw = response.choices[0].message.content.strip()

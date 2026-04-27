@@ -1,4 +1,3 @@
-# config/__init__.py
-from .manager import ConfigManager
+from .manager import ConfigManager, Config, RepoConfig
 
-config = ConfigManager.get_instance()
+cfg = ConfigManager.get_instance()

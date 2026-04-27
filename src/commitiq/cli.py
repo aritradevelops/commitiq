@@ -9,9 +9,11 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 
+
 @click.group()
 def cli():
     """entry point for all commands"""
+
 
 @cli.command()
 @click.option("--since", default=None, help="start date (YYYY-MM-DD), defaults to Monday of current week")
@@ -24,7 +26,8 @@ def summarize(since: Optional[str], until: Optional[str], model: Optional[str], 
     since = since or (today - timedelta(days=today.weekday())).isoformat()
     until = until or today.isoformat()
     if not cfg.repos:
-        click.echo("No repos configured. Run: commitiq add <path>", err=output_format == "json")
+        click.echo("No repos configured. Run: commitiq add <path>",
+                   err=output_format == "json")
         return
 
     by_repo: Dict[str, Dict[str, List[str]]] = {}
@@ -35,12 +38,14 @@ def summarize(since: Optional[str], until: Optional[str], model: Optional[str], 
             d = c.authored_datetime.date().isoformat()
             if d not in by_repo[repo_name]:
                 by_repo[repo_name][d] = []
-            by_repo[repo_name][d].append(str(c.message).strip().splitlines()[0])
+            by_repo[repo_name][d].append(
+                str(c.message).strip().splitlines()[0])
 
     by_repo = {repo: dates for repo, dates in by_repo.items() if dates}
 
     if not by_repo:
-        click.echo("No commits found for the given range.", err=output_format == "json")
+        click.echo("No commits found for the given range.",
+                   err=output_format == "json")
         return
 
     active_model = model or cfg.model
@@ -64,28 +69,33 @@ def summarize(since: Optional[str], until: Optional[str], model: Optional[str], 
     results: Dict[Tuple[str, str], List[str]] = {}
     with click.progressbar(
         length=len(jobs), label="  Processing", width=36, show_pos=True,
-        file=click.get_text_stream("stderr") if output_format == "json" else None,
+        file=click.get_text_stream(
+            "stderr") if output_format == "json" else None,
     ) as bar:
         with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {executor.submit(summarizer.summarize, commits): key for key, commits in jobs.items()}
+            futures = {executor.submit(
+                summarizer.summarize, commits): key for key, commits in jobs.items()}
             for future in as_completed(futures):
                 key = futures[future]
                 try:
                     results[key] = future.result()
                 except Exception as e:
                     repo_name, d = key
-                    click.echo(click.style(f"\n  warning: failed to summarize {repo_name} / {d}: {e}", fg="yellow"), err=True)
+                    click.echo(click.style(
+                        f"\n  warning: failed to summarize {repo_name} / {d}: {e}", fg="yellow"), err=True)
                 bar.update(1)
     click.echo(err=output_format == "json")
 
-    all_dates = sorted({d for dates in by_repo.values() for d in dates}, reverse=True)
+    all_dates = sorted({d for dates in by_repo.values()
+                       for d in dates}, reverse=True)
 
     if output_format == "json":
         output = [
             {
                 "date": d,
                 "repos": [
-                    {"repo": repo_name, "tasks": results.get((repo_name, d), [])}
+                    {"repo": repo_name, "tasks": results.get(
+                        (repo_name, d), [])}
                     for repo_name in sorted(by_repo)
                     if d in by_repo[repo_name]
                 ],
@@ -105,6 +115,7 @@ def summarize(since: Optional[str], until: Optional[str], model: Optional[str], 
                 click.echo(f"    • {task}")
         click.echo()
 
+
 @cli.command()
 @click.argument("model")
 @click.option("--no-verify", is_flag=True, help="skip test call (for offline/local models)")
@@ -113,12 +124,16 @@ def use(model: str, no_verify: bool):
     if not no_verify:
         click.echo(f"Verifying {model}...")
         try:
-            litellm.completion(model=model, messages=[{"role": "user", "content": "hi"}], max_tokens=1)
+            litellm.completion(model=model, messages=[
+                               {"role": "user", "content": "hi"}], max_tokens=1)
         except Exception as e:
-            click.echo(click.style("✘ Model verification failed: ", fg="red", bold=True) + str(e))
+            click.echo(click.style("✘ Model verification failed: ",
+                       fg="red", bold=True) + str(e))
             return
     cfg.set_model(model)
-    click.echo(click.style("✔ Model set to ", fg="green", bold=True) + click.style(model, bold=True))
+    click.echo(click.style("✔ Model set to ", fg="green",
+               bold=True) + click.style(model, bold=True))
+
 
 @cli.command(name="list")
 def list_repos():
@@ -128,7 +143,9 @@ def list_repos():
         click.echo("No repos configured. Run: commitiq add <path>")
         return
     for r in repos:
-        click.echo(click.style(r.name or r.path, bold=True) + click.style(f"  {r.path}", fg="bright_black"))
+        click.echo(click.style(r.name or r.path, bold=True) +
+                   click.style(f"  {r.path}", fg="bright_black"))
+
 
 @cli.command()
 @click.argument("path")
@@ -140,6 +157,7 @@ def remove(path: str):
         return
     cfg.remove_repo(p)
     click.echo(click.style("✔ Repo removed", fg="green", bold=True) + f"  {p}")
+
 
 @cli.command(name="mcp")
 def mcp_server():
@@ -156,5 +174,5 @@ def add(path: str, name: Optional[str]):
     p = Path(path).resolve()
     repo_name = name or p.name
     cfg.add_repo(str(p), repo_name)
-    click.echo(click.style("✔ Repo added", fg="green", bold=True) + f"  {click.style(repo_name, bold=True)} → {p}")
-
+    click.echo(click.style("✔ Repo added", fg="green", bold=True) +
+               f"  {click.style(repo_name, bold=True)} → {p}")

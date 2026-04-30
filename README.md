@@ -2,6 +2,77 @@
 
 CommitIQ is a CLI tool that turns your git commits into a clean, human-readable summary of what you actually shipped. It scans commits across multiple repositories, filters by your git author identity, and uses AI to translate technical commit messages into product-facing task descriptions — grouped by repo and date.
 
+## MCP Server
+
+CommitIQ ships a built-in [MCP](https://modelcontextprotocol.io/) server that exposes its functionality as tools any MCP-compatible AI agent can call — Claude Desktop, Cursor, Zed, or any custom agent built with the MCP SDK.
+
+### Starting the server
+
+```bash
+commitiq mcp
+```
+
+The server runs over **stdio** (standard input/output), which is the transport used by all desktop MCP clients. It stays running in the foreground until you press `Ctrl+C` or send `SIGTERM`.
+
+### Connecting Claude Desktop
+
+Add the following to your Claude Desktop config file.
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`  
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "commitiq": {
+      "command": "commitiq",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+If `commitiq` is not on your `PATH` (e.g. installed in a uv environment), use the full path to the binary:
+
+```json
+{
+  "mcpServers": {
+    "commitiq": {
+      "command": "/Users/you/.local/bin/commitiq",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving. You should see the commitiq tools listed under the plug icon in the chat input bar.
+
+### Connecting other agents
+
+Any MCP client that supports the stdio transport can connect to CommitIQ. Point the client at:
+
+- **command:** `commitiq`
+- **args:** `["mcp"]`
+
+For agents built with the [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) or similar, pass the command above as the `StdioServerParameters`.
+
+### Available tools
+
+| Tool | Description |
+|---|---|
+| `list_repos` | Returns all repos currently tracked by CommitIQ (`path`, `name`). |
+| `add_repo(path, name?)` | Adds a repo to the tracked list. `name` is optional. |
+| `remove_repo(path)` | Removes a repo from the tracked list. |
+| `summarize(from_date?, to_date?, model?)` | Summarizes commits as functional tasks. `from_date`/`to_date` are `YYYY-MM-DD` (defaults to current week). `model` overrides the saved model for that call. Returns a list of `{date, repos: [{repo, tasks}]}` objects. |
+
+### Example prompts
+
+Once connected, you can ask your agent things like:
+
+- *"What did I work on this week?"*
+- *"Summarize my commits for April 2025."*
+- *"Add ~/projects/my-app to commitiq and summarize today's work."*
+
 ## Prerequisites
 
 - Python 3.13 or higher
@@ -38,6 +109,7 @@ CommitIQ uses [LiteLLM](https://docs.litellm.ai/) under the hood, so it supports
 | OpenAI | `gpt-4o-mini` | `OPENAI_API_KEY` |
 | Anthropic | `claude-haiku-4-5` | `ANTHROPIC_API_KEY` |
 | Google | `gemini/gemini-2.0-flash` | `GEMINI_API_KEY` |
+| Ollama (local) | `ollama/llama3` | *(none required)* |
 
 The default model is `gpt-4o-mini`. You can change it at any time with the `use` command.
 
